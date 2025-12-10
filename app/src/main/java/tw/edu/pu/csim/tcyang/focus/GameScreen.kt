@@ -27,7 +27,6 @@ import kotlin.random.Random
 fun GameScreen(level: String, onBackToMenu: () -> Unit) {
     val colors = listOf(Color(0xFFE91E63), Color(0xFF9C27B0), Color(0xFF2196F3), Color(0xFF4CAF50), Color(0xFFFF9800))
 
-
     data class Config(val time: Int, val size: Dp, val distractors: Int, val interval: Long)
     val config = when (level) {
         "易" -> Config(60, 110.dp, 3, 1800L)
@@ -81,7 +80,41 @@ fun GameScreen(level: String, onBackToMenu: () -> Unit) {
 
     Box(modifier = Modifier.fillMaxSize().background(Color(0xFFB3E5FC))) {
 
-        // 返回 + 難度標籤
+        // 【修正 1：將 Canvas 移到最前/最底層】
+        // 確保點擊偵測不會蓋住上層的按鈕和 UI 元素
+        Canvas(
+            modifier = Modifier
+                .fillMaxSize()
+                .pointerInput(playing) {
+                    if (!playing) return@pointerInput
+                    detectTapGestures { offset ->
+                        val d = sqrt((offset.x - target.x).pow(2) + (offset.y - target.y).pow(2))
+                        if (d < config.size.value * 1.3f) {
+                            score += when (level) { "易" -> 10; "中" -> 20; else -> 30 }
+                        }
+                    }
+                }
+        ) {
+            if (playing) {
+                // 目標（閃爍）
+                drawCircle(
+                    color = targetColor,
+                    radius = config.size.toPx() * scale / 2,
+                    center = target
+                )
+                // 干擾物（灰色半透明）
+                distractors.forEach {
+                    drawCircle(
+                        color = Color.Gray.copy(alpha = 0.4f),
+                        radius = config.size.toPx() * 0.6f,
+                        center = it
+                    )
+                }
+            }
+        }
+        // -------------------------------------------------------------
+
+        // 返回 + 難度標籤 (現在位於 Canvas 上方，可點擊)
         Row(
             modifier = Modifier.align(Alignment.TopStart).padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
@@ -123,38 +156,6 @@ fun GameScreen(level: String, onBackToMenu: () -> Unit) {
                 color = Color(0xFF1976D2),
                 modifier = Modifier.padding(horizontal = 32.dp, vertical = 12.dp)
             )
-        }
-
-        // 點擊偵測 + 畫圖
-        Canvas(
-            modifier = Modifier
-                .fillMaxSize()
-                .pointerInput(playing) {
-                    if (!playing) return@pointerInput
-                    detectTapGestures { offset ->
-                        val d = sqrt((offset.x - target.x).pow(2) + (offset.y - target.y).pow(2))
-                        if (d < config.size.value * 1.3f) {
-                            score += when (level) { "易" -> 10; "中" -> 20; else -> 30 }
-                        }
-                    }
-                }
-        ) {
-            if (playing) {
-                // 目標（閃爍）
-                drawCircle(
-                    color = targetColor,
-                    radius = config.size.toPx() * scale / 2,
-                    center = target
-                )
-                // 干擾物（灰色半透明）
-                distractors.forEach {
-                    drawCircle(
-                        color = Color.Gray.copy(alpha = 0.4f),
-                        radius = config.size.toPx() * 0.6f,
-                        center = it
-                    )
-                }
-            }
         }
 
         // 遊戲結束

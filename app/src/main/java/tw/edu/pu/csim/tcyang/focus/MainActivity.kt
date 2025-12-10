@@ -2,6 +2,7 @@ package tw.edu.pu.csim.tcyang.focus
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler // 確保有這個引入
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.background
@@ -40,10 +41,17 @@ fun MainApp() {
             selectedLevel = level
             currentScreen = "game"
         }
-        "game" -> GameScreen(
-            level = selectedLevel,
-            onBackToMenu = { currentScreen = "menu" }
-        )
+        "game" -> {
+            // 【修正 2：新增 BackHandler 支援系統返回鍵】
+            BackHandler(enabled = currentScreen == "game") {
+                currentScreen = "menu"
+            }
+
+            GameScreen(
+                level = selectedLevel,
+                onBackToMenu = { currentScreen = "menu" }
+            )
+        }
     }
 }
 
@@ -60,7 +68,7 @@ fun MainMenuScreen(onStartGame: (String) -> Unit) {
                 horizontalArrangement = Arrangement.Start
             ) {
                 IconButton(
-                    onClick = { },
+                    onClick = { /* 設定功能 */ },
                     modifier = Modifier
                         .size(56.dp)
                         .background(Color(0xFF6BB6FF), RoundedCornerShape(12.dp))
