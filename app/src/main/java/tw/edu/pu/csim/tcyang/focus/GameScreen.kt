@@ -78,10 +78,9 @@ fun GameScreen(level: String, onBackToMenu: () -> Unit) {
         animationSpec = infiniteRepeatable(tween(600), RepeatMode.Reverse)
     )
 
+    // 淺藍色背景
     Box(modifier = Modifier.fillMaxSize().background(Color(0xFFB3E5FC))) {
 
-        // 【修正 1：將 Canvas 移到最前/最底層】
-        // 確保點擊偵測不會蓋住上層的按鈕和 UI 元素
         Canvas(
             modifier = Modifier
                 .fillMaxSize()
@@ -89,8 +88,8 @@ fun GameScreen(level: String, onBackToMenu: () -> Unit) {
                     if (!playing) return@pointerInput
                     detectTapGestures { offset ->
                         val d = sqrt((offset.x - target.x).pow(2) + (offset.y - target.y).pow(2))
-                        if (d < config.size.value * 1.3f) {
-                            score += when (level) { "易" -> 10; "中" -> 20; else -> 30 }
+                        if (d < config.size.toPx() * scale / 2) {
+                            score += when (level) { "易" -> 10; "中" -> 10; else -> 10 }
                         }
                     }
                 }
@@ -106,7 +105,7 @@ fun GameScreen(level: String, onBackToMenu: () -> Unit) {
                 distractors.forEach {
                     drawCircle(
                         color = Color.Gray.copy(alpha = 0.4f),
-                        radius = config.size.toPx() * 0.6f,
+                        radius = config.size.toPx() * 0.6f / 2,
                         center = it
                     )
                 }
@@ -114,27 +113,27 @@ fun GameScreen(level: String, onBackToMenu: () -> Unit) {
         }
         // -------------------------------------------------------------
 
-        // 返回 + 難度標籤 (現在位於 Canvas 上方，可點擊)
+        // 返回 + 難度標籤 (深藍色)
         Row(
             modifier = Modifier.align(Alignment.TopStart).padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             IconButton(
                 onClick = onBackToMenu,
-                modifier = Modifier.background(Color(0xFF42A5F5), CircleShape)
+                modifier = Modifier.background(Color(0xFF1E90FF), CircleShape)
             ) {
                 Text("返回", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
             }
             Spacer(Modifier.width(12.dp))
             Card(
-                colors = CardDefaults.cardColors(Color(0xFF42A5F5)),
+                colors = CardDefaults.cardColors(Color(0xFF1E90FF)),
                 shape = RoundedCornerShape(20.dp)
             ) {
                 Text(" $level ", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp))
             }
         }
 
-        // 計時器
+        // 計時器 (深藍色字體)
         Text(
             text = String.format("%02d:%02d", timeLeft / 60, timeLeft % 60),
             fontSize = 48.sp,
