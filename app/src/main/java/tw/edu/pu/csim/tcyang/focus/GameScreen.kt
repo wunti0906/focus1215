@@ -13,6 +13,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
@@ -54,7 +55,6 @@ fun GameScreen(level: String, onBackToMenu: () -> Unit) {
     var distractors by remember { mutableStateOf(emptyList<Offset>()) }
     var targetColor by remember { mutableStateOf<Color?>(null) }
 
-    // === 把 spawnNewTarget 函數移到這裡（LaunchedEffect 之前）===
     fun spawnNewTarget() {
         val x = Random.nextFloat() * 800f + 200f
         val y = Random.nextFloat() * 1200f + 400f
@@ -72,9 +72,7 @@ fun GameScreen(level: String, onBackToMenu: () -> Unit) {
         }
         distractors = list
     }
-    // ============================================================
 
-    // 遊戲倒數計時
     LaunchedEffect(isPlaying) {
         while (timeLeft > 0 && isPlaying) {
             delay(1000L)
@@ -83,14 +81,9 @@ fun GameScreen(level: String, onBackToMenu: () -> Unit) {
         isPlaying = false
     }
 
-    // 定時產生目標（現在可以正常呼叫 spawnNewTarget）
     LaunchedEffect(isPlaying) {
         if (!isPlaying) return@LaunchedEffect
-
-        // 立刻產生第一顆
         spawnNewTarget()
-
-        // 定時循環
         while (true) {
             delay(config.interval)
             if (!isPlaying) break
@@ -113,31 +106,51 @@ fun GameScreen(level: String, onBackToMenu: () -> Unit) {
                     if (!isPlaying) return@pointerInput
                     detectTapGestures { offset ->
                         val currentTarget = target ?: return@detectTapGestures
-                        val distance = sqrt((offset.x - currentTarget.x).pow(2) + (offset.y - currentTarget.y).pow(2))
-                        if (distance < config.size.toPx() * 0.75f) {
+                        val targetRadius = config.size.toPx() * scale / 2
+
+                        val distToTarget = sqrt((offset.x - currentTarget.x).pow(2) + (offset.y - currentTarget.y).pow(2))
+                        if (distToTarget >= targetRadius) return@detectTapGestures
+
+                        val distractorRadius = config.size.toPx() * 0.6f
+                        val hitDistractor = distractors.any { pos ->
+                            val distToDistractor = sqrt((offset.x - pos.x).pow(2) + (offset.y - pos.y).pow(2))
+                            distToDistractor < distractorRadius
+                        }
+
+                        if (!hitDistractor) {
                             score += config.points
-                            spawnNewTarget()  // 點中立刻刷新
+                            spawnNewTarget()
                         }
                     }
                 }
         ) {
             if (isPlaying && target != null && targetColor != null) {
-                drawCircle(
-                    color = targetColor!!,
-                    radius = config.size.toPx() * scale / 2,
-                    center = target!!
-                )
+                // 先畫灰色干擾圓（非常淡）
                 distractors.forEach { pos ->
                     drawCircle(
-                        color = Color.Gray.copy(alpha = 0.4f),
+                        color = Color.Gray.copy(alpha = 0.2f),  // 更淡，避免混淆
                         radius = config.size.toPx() * 0.6f,
                         center = pos
                     )
                 }
+
+                drawCircle(
+                    color = targetColor!!.copy(alpha = 0.4f),
+                    radius = config.size.toPx() * scale / 2 + 15f,
+                    center = target!!,
+                    style = Stroke(width = 30f)
+                )
+
+                // 主目標圓：半透明（alpha = 0.4f），如你所願
+                drawCircle(
+                    color = targetColor!!.copy(alpha = 0.4f),
+                    radius = config.size.toPx() * scale / 2,
+                    center = target!!
+                )
             }
         }
 
-        // UI 元素（返回、難度、計時、分數）
+        // UI 元素（不變）
         Row(
             modifier = Modifier.align(Alignment.TopStart).padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
@@ -180,7 +193,6 @@ fun GameScreen(level: String, onBackToMenu: () -> Unit) {
             )
         }
 
-        // 遊戲結束
         if (!isPlaying) {
             Card(
                 modifier = Modifier.align(Alignment.Center).size(360.dp, 480.dp),
