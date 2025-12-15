@@ -21,99 +21,123 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import kotlin.math.pow
 import kotlin.math.sqrt
+import kotlin.math.cos
+import kotlin.math.sin
 import kotlin.random.Random
 
 @Composable
 fun GameScreen(level: String, onBackToMenu: () -> Unit) {
-    val colors = listOf(Color(0xFFE91E63), Color(0xFF9C27B0), Color(0xFF2196F3), Color(0xFF4CAF50), Color(0xFFFF9800))
+    val colors = listOf(
+        Color(0xFFE91E63), Color(0xFF9C27B0), Color(0xFF2196F3),
+        Color(0xFF4CAF50), Color(0xFFFF9800)
+    )
 
-    data class Config(val time: Int, val size: Dp, val distractors: Int, val interval: Long)
+    data class Config(
+        val time: Int,
+        val size: Dp,
+        val distractors: Int,
+        val interval: Long,
+        val points: Int
+    )
+
     val config = when (level) {
-        "易" -> Config(60, 110.dp, 3, 1800L)
-        "中" -> Config(45, 90.dp, 6, 1200L)
-        else -> Config(30, 70.dp, 9, 800L)
+        "易" -> Config(60, 110.dp, 3, 1800L, 10)
+        "中" -> Config(45, 90.dp, 6, 1200L, 20)
+        else -> Config(30, 70.dp, 9, 800L, 30)
     }
 
     var score by remember { mutableStateOf(0) }
     var timeLeft by remember { mutableStateOf(config.time) }
-    var playing by remember { mutableStateOf(true) }
-    var target by remember { mutableStateOf(Offset.Zero) }
-    var distractors by remember { mutableStateOf(listOf<Offset>()) }
-    var targetColor by remember { mutableStateOf(colors.random()) }
+    var isPlaying by remember { mutableStateOf(true) }
 
-    // 倒數計時
-    LaunchedEffect(playing) {
-        while (timeLeft > 0 && playing) {
+    var target by remember { mutableStateOf<Offset?>(null) }
+    var distractors by remember { mutableStateOf(emptyList<Offset>()) }
+    var targetColor by remember { mutableStateOf<Color?>(null) }
+
+    // === 把 spawnNewTarget 函數移到這裡（LaunchedEffect 之前）===
+    fun spawnNewTarget() {
+        val x = Random.nextFloat() * 800f + 200f
+        val y = Random.nextFloat() * 1200f + 400f
+
+        target = Offset(x, y)
+        targetColor = colors.random()
+
+        val list = mutableListOf<Offset>()
+        repeat(config.distractors) {
+            val angle = Random.nextFloat() * 360f
+            val dist = 160f + Random.nextFloat() * 140f
+            val dx = cos(Math.toRadians(angle.toDouble())).toFloat() * dist
+            val dy = sin(Math.toRadians(angle.toDouble())).toFloat() * dist
+            list.add(Offset(x + dx, y + dy))
+        }
+        distractors = list
+    }
+    // ============================================================
+
+    // 遊戲倒數計時
+    LaunchedEffect(isPlaying) {
+        while (timeLeft > 0 && isPlaying) {
             delay(1000L)
             timeLeft--
         }
-        playing = false
+        isPlaying = false
     }
 
-    // 產生目標
-    LaunchedEffect(playing) {
-        while (playing) {
-            delay(config.interval)
-            val x = Random.nextFloat() * 800f + 200f
-            val y = Random.nextFloat() * 1200f + 400f
-            target = Offset(x, y)
-            targetColor = colors.random()
+    // 定時產生目標（現在可以正常呼叫 spawnNewTarget）
+    LaunchedEffect(isPlaying) {
+        if (!isPlaying) return@LaunchedEffect
 
-            val list = mutableListOf<Offset>()
-            repeat(config.distractors) {
-                val angle = Random.nextFloat() * 360f
-                val dist = 160f + Random.nextFloat() * 140f
-                val dx = kotlin.math.cos(Math.toRadians(angle.toDouble())).toFloat() * dist
-                val dy = kotlin.math.sin(Math.toRadians(angle.toDouble())).toFloat() * dist
-                list.add(Offset(x + dx, y + dy))
-            }
-            distractors = list
+        // 立刻產生第一顆
+        spawnNewTarget()
+
+        // 定時循環
+        while (true) {
+            delay(config.interval)
+            if (!isPlaying) break
+            spawnNewTarget()
         }
     }
 
-    // 閃爍動畫
     val scale by rememberInfiniteTransition().animateFloat(
         initialValue = 0.9f,
         targetValue = 1.4f,
         animationSpec = infiniteRepeatable(tween(600), RepeatMode.Reverse)
     )
 
-    // 淺藍色背景
     Box(modifier = Modifier.fillMaxSize().background(Color(0xFFB3E5FC))) {
 
         Canvas(
             modifier = Modifier
                 .fillMaxSize()
-                .pointerInput(playing) {
-                    if (!playing) return@pointerInput
+                .pointerInput(isPlaying) {
+                    if (!isPlaying) return@pointerInput
                     detectTapGestures { offset ->
-                        val d = sqrt((offset.x - target.x).pow(2) + (offset.y - target.y).pow(2))
-                        if (d < config.size.toPx() * scale / 2) {
-                            score += when (level) { "易" -> 10; "中" -> 10; else -> 10 }
+                        val currentTarget = target ?: return@detectTapGestures
+                        val distance = sqrt((offset.x - currentTarget.x).pow(2) + (offset.y - currentTarget.y).pow(2))
+                        if (distance < config.size.toPx() * 0.75f) {
+                            score += config.points
+                            spawnNewTarget()  // 點中立刻刷新
                         }
                     }
                 }
         ) {
-            if (playing) {
-                // 目標（閃爍）
+            if (isPlaying && target != null && targetColor != null) {
                 drawCircle(
-                    color = targetColor,
+                    color = targetColor!!,
                     radius = config.size.toPx() * scale / 2,
-                    center = target
+                    center = target!!
                 )
-                // 干擾物（灰色半透明）
-                distractors.forEach {
+                distractors.forEach { pos ->
                     drawCircle(
                         color = Color.Gray.copy(alpha = 0.4f),
-                        radius = config.size.toPx() * 0.6f / 2,
-                        center = it
+                        radius = config.size.toPx() * 0.6f,
+                        center = pos
                     )
                 }
             }
         }
-        // -------------------------------------------------------------
 
-        // 返回 + 難度標籤 (深藍色)
+        // UI 元素（返回、難度、計時、分數）
         Row(
             modifier = Modifier.align(Alignment.TopStart).padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
@@ -129,11 +153,11 @@ fun GameScreen(level: String, onBackToMenu: () -> Unit) {
                 colors = CardDefaults.cardColors(Color(0xFF1E90FF)),
                 shape = RoundedCornerShape(20.dp)
             ) {
-                Text(" $level ", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp))
+                Text(" $level ", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp))
             }
         }
 
-        // 計時器 (深藍色字體)
         Text(
             text = String.format("%02d:%02d", timeLeft / 60, timeLeft % 60),
             fontSize = 48.sp,
@@ -142,7 +166,6 @@ fun GameScreen(level: String, onBackToMenu: () -> Unit) {
             modifier = Modifier.align(Alignment.TopEnd).padding(24.dp)
         )
 
-        // 分數
         Card(
             modifier = Modifier.align(Alignment.TopCenter).padding(top = 80.dp),
             colors = CardDefaults.cardColors(Color.White.copy(alpha = 0.9f)),
@@ -158,7 +181,7 @@ fun GameScreen(level: String, onBackToMenu: () -> Unit) {
         }
 
         // 遊戲結束
-        if (!playing) {
+        if (!isPlaying) {
             Card(
                 modifier = Modifier.align(Alignment.Center).size(360.dp, 480.dp),
                 colors = CardDefaults.cardColors(Color.White),
